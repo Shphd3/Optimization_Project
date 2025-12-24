@@ -1,0 +1,17 @@
+✅ 场景参数生成，Random seed = 29239
+✅ Simulation Start: Random seed = 29239
+Round [0] Time [0.0026s] | obj=144087.0927, max_load=1.2935, net_capa=10.5392, x_diff=0.8417, grad_norm=381748.3701, CIO_avg_min_max=[0.0000,-0.1540,0.0460], prob=1.0000000000000002
+Round [100] Time [0.1182s] | obj=3953.2231, max_load=1.0213, net_capa=10.3871, x_diff=0.2861, grad_norm=792.8114, CIO_avg_min_max=[-0.0000,-8.0425,8.5716], prob=1.0
+Round [200] Time [0.1221s] | obj=3387.0934, max_load=0.9896, net_capa=10.3065, x_diff=0.1754, grad_norm=381.6822, CIO_avg_min_max=[-0.0000,-10.5888,15.3929], prob=0.9999999999999998
+Round [300] Time [0.1151s] | obj=3175.6716, max_load=0.9674, net_capa=10.2652, x_diff=0.1300, grad_norm=226.3625, CIO_avg_min_max=[-0.0000,-11.7603,18.7131], prob=1.0
+Round [400] Time [0.1148s] | obj=3067.2566, max_load=0.9505, net_capa=10.2435, x_diff=0.0960, grad_norm=150.4421, CIO_avg_min_max=[0.0000,-12.3949,20.6937], prob=1.0000000000000002
+Round [500] Time [0.1161s] | obj=3001.9643, max_load=0.9372, net_capa=10.2302, x_diff=0.0711, grad_norm=106.6852, CIO_avg_min_max=[0.0000,-12.7568,23.4848], prob=1.0
+Round [600] Time [0.1167s] | obj=2957.8517, max_load=0.9263, net_capa=10.2204, x_diff=0.0548, grad_norm=79.1812, CIO_avg_min_max=[0.0000,-12.9292,25.4318], prob=1.0
+Round [700] Time [0.1167s] | obj=2925.0023, max_load=0.9172, net_capa=10.2126, x_diff=0.0454, grad_norm=61.0158, CIO_avg_min_max=[0.0000,-12.9250,26.7400], prob=0.9999999999999998
+Round [800] Time [0.1169s] | obj=2898.7782, max_load=0.9096, net_capa=10.2058, x_diff=0.0409, grad_norm=48.4700, CIO_avg_min_max=[0.0000,-12.7424,27.5549], prob=1.0
+Round [900] Time [0.1167s] | obj=2877.0511, max_load=0.9030, net_capa=10.1998, x_diff=0.0390, grad_norm=39.4033, CIO_avg_min_max=[-0.0000,-12.3926,27.9822], prob=1.0000000000000002
+Round [1000] Time [0.1171s] | obj=2858.8220, max_load=0.8974, net_capa=10.1944, x_diff=0.0381, grad_norm=32.5749, CIO_avg_min_max=[0.0000,-12.5412,28.1008], prob=0.9999999999999998
+Round [1100] Time [0.1218s] | obj=2843.5742, max_load=0.8924, net_capa=10.1894, x_diff=0.0375, grad_norm=27.2436, CIO_avg_min_max=[0.0000,-13.1381,27.9736], prob=1.0
+Round [1200] Time [0.1250s] | obj=2830.9447, max_load=0.8881, net_capa=10.1850, x_diff=0.0368, grad_norm=22.9491, CIO_avg_min_max=[0.0000,-13.7090,27.6571], prob=1.0000000000000002
+1.算法在第 1270 次迭代收敛(obj): obj=2823.5683, max_load=0.8855, net_capa=10.1824, x_diff=0.0363, grad_norm=20.4326, CIO_avg_min_max=[0.0000,-14.0941,27.3589], prob=1.0000000000000002
+✅ 动态MP4视频已保存：cell_CIO_opt_20251225_010623.gif

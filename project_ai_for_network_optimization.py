@@ -399,12 +399,61 @@ def network_capa_estimate(Prob, Capa, Conn, ALL_Cells_Bw):
 def forward(x_t, beta, Q0, Alpha, L0, C0_all, Wq, We, Rsrp, Conn, Capa, ALL_Users_Traffic, ALL_Cells_Bw):
     cache = {}
 
+    # 1. RSRP + CIO
+    rsrp_cio = Rsrp + x_t[:, np.newaxis]
+
+    # 2. Softmax Probability
+    rsrp_norm = rsrp_cio - rsrp_cio.max(axis=0)
+    exp_rsrp = np.exp(rsrp_norm * beta) * Conn
+    sum_exp = exp_rsrp.sum(axis=0, keepdims=True)
+    sum_exp[sum_exp == 0] = 1e-9
+    Prob = exp_rsrp / sum_exp
+
+    # 3. Load
+    # L_m_abs: Absolute bandwidth usage (Sum(A_n * Prob_mn / Capa_mn))
+    L_m_abs = np.sum((ALL_Users_Traffic * Prob) / Capa, axis=1)
+    # l_m_ratio: Bandwidth utilization ratio (L_m / B_m)
+    l_m_ratio = L_m_abs / ALL_Cells_Bw
+
+    # 4. Costs
+    # QoS Cost (using utilization ratio)
+    qos_cost_m = func_Q(l_m_ratio, ALL_Cells_Bw, Q0, L0, Alpha)
+    # Energy Cost (using utilization ratio)
+    energy_cost_m = func_E(l_m_ratio, ALL_Cells_Bw, C0_all)
+
+    # Total Objective
+    obj = np.sum(Wq * qos_cost_m + We * energy_cost_m)
+
+    cache = {
+        'Prob': Prob,
+        'Load_m': l_m_ratio,
+        'L_m_abs': L_m_abs,
+        'Unit_Cost': Wq * qos_cost_m + We * energy_cost_m,
+        'QoS_Cost': np.sum(Wq * qos_cost_m),
+        'Energy_Cost': np.sum(We * energy_cost_m)
+    }
 
     return obj, cache
 
 
 # Backward（链式法则计算梯度）：输入xt以及系统参数，输出梯度
 def backward(x_t, cache, M, N, beta, Q0, Alpha, L0, C0_all, Wq, We, Conn, Capa, ALL_Users_Traffic, ALL_Cells_Bw):
+    Prob = cache['Prob']
+    l_m_ratio = cache['Load_m']
+
+    # 1. Marginal Cost w.r.t Load Ratio (l_m)
+    grad_Q = grad_Q_to_l(l_m_ratio, ALL_Cells_Bw, Q0, L0, Alpha)
+    grad_E = grad_E_to_l(l_m_ratio, ALL_Cells_Bw, C0_all)
+    dJ_dl = Wq * grad_Q + We * grad_E  # Shape (M,)
+
+    # 2. Marginal Cost U_mn = dJ/dl_m * dl_m/dProb_mn
+    # dl_m/dProb_mn = A_n / (Capa_mn * B_m)
+    U_mn = dJ_dl[:, np.newaxis] * ALL_Users_Traffic / (Capa * ALL_Cells_Bw[:, np.newaxis])
+
+    # 3. Gradient w.r.t X_i
+    # dJ/dX_i = beta * sum_n [ Prob_in * ( U_in - sum_k(Prob_kn * U_kn) ) ]
+    avg_U_n = np.sum(Prob * U_mn, axis=0) # Shape (N,)
+    grad_obj_to_x = beta * np.sum(Prob * (U_mn - avg_U_n), axis=1) # Shape (M,)
 
     return grad_obj_to_x
 
@@ -414,12 +463,13 @@ def backward(x_t, cache, M, N, beta, Q0, Alpha, L0, C0_all, Wq, We, Conn, Capa, 
 
 # （1）梯度下降法迭代步骤
 def grad_step(x_t, grad, lr=0.01):
-
+    x_new = x_t - lr * grad
     return x_new
 
 # （2）Momentum动量梯度下降法迭代步骤
 def momentum_step(x_t, v_t, grad, lr=0.1, beta=0.9):
-
+    v_new = beta * v_t + lr * grad
+    x_new = x_t - v_new
     return x_new, v_new
 
 # （3）Nesterov加速动量梯度下降法迭代步骤
@@ -427,19 +477,34 @@ def momentum_step(x_t, v_t, grad, lr=0.1, beta=0.9):
 
 # （4）Adagrad自适应梯度下降法迭代步骤
 def adagrad_step(x_t, G_t, grad, lr=0.1):
-
+    eps = 1e-8
+    G_new = G_t + grad**2
+    x_new = x_t - lr * grad / (np.sqrt(G_new) + eps)
     return x_new, G_new
 
 
 # （5）RMSprop(Root Mean Square Propagation)改进自适应梯度下降法迭代步骤
 def rmsprop_step(x_t, G_t, grad, lr=0.1, beta=0.9):
-
+    eps = 1e-8
+    G_new = beta * G_t + (1 - beta) * grad**2
+    x_new = x_t - lr * grad / (np.sqrt(G_new) + eps)
     return x_new, G_new
 
 
 # （6）Adam (Adaptive Moment Estimation) 自适应矩估计法迭代步骤
 def adam_step(x_t, v_t, G_t, grad, t, lr=0.1, beta1=0.9, beta2=0.999):
-
+    eps = 1e-8
+    # Update biased first moment estimate
+    v_new = beta1 * v_t + (1 - beta1) * grad
+    # Update biased second raw moment estimate
+    G_new = beta2 * G_t + (1 - beta2) * grad**2
+    
+    # Compute bias-corrected first moment estimate
+    v_hat = v_new / (1 - beta1**t)
+    # Compute bias-corrected second raw moment estimate
+    G_hat = G_new / (1 - beta2**t)
+    
+    x_new = x_t - lr * v_hat / (np.sqrt(G_hat) + eps)
     return x_new, v_new, G_new
 
 
@@ -477,7 +542,7 @@ We = 1  # 能耗成本权重
 import time
 
 
-max_iteration = 20000  # 最大迭代次数
+max_iteration = 2000  # 最大迭代次数
 tolerance = 1e-3     # 策略收敛容忍度
 tolerance_obj = 1e-1   # 目标值收敛容忍度
 tolerance_grad = 1    # 梯度值收敛容忍度
@@ -503,21 +568,26 @@ x_0 = np.zeros(M)
 x_t = np.zeros(M)
 G_t = np.zeros(M)
 v_t = np.zeros(M)
+obj_pre = float('inf')
+start_time = time.time()
 
 for i in range(max_iteration):
 
     # 1. Forward to generate and cache results
 
-    obj, cache = forward(...)
+    obj, cache = forward(x_t, beta, Q0, Alpha, L0, C0_all, Wq, We, Rsrp, Conn, Capa, ALL_Users_Traffic, ALL_Cells_Bw)
+
+    # Calculate Network Capacity for monitoring
+    net_capa = network_capa_estimate(cache['Prob'], Capa, Conn, ALL_Cells_Bw)
 
     # 2. Backward to compute gradient
 
-    grad = backward(...)
+    grad = backward(x_t, cache, M, N, beta, Q0, Alpha, L0, C0_all, Wq, We, Conn, Capa, ALL_Users_Traffic, ALL_Cells_Bw)
 
 
     # 3. update solution by gradient-descent algorithms
 
-    x_new = grad_step(x_t, ...)
+    x_new, v_new, G_new = adam_step(x_t, v_t, G_t, grad, i+1, lr=0.1)
 
 
     # 4. normalize x (for better illustration)
@@ -545,6 +615,14 @@ for i in range(max_iteration):
         end_time = time.time()
         print(f"Round [{i}] Time [{end_time - start_time:.4f}s] | obj={obj:.4f}, max_load={np.max(cache['Load_m']):.4f}, net_capa={net_capa:.4f}, x_diff={np.linalg.norm(x_new - x_t):.4f}, grad_norm={np.linalg.norm(grad):.4f}, CIO_avg_min_max=[{np.mean(x_new):.4f},{np.min(x_new):.4f},{np.max(x_new):.4f}], prob={np.sum(cache['Prob'])/N}")
         start_time = time.time()
+
+    gd_path.append(x_t.copy())
+    gd_load.append(cache['Load_m'])
+    gd_obj.append(obj)
+    gd_obj_Q.append(cache['QoS_Cost'])
+    gd_obj_E.append(cache['Energy_Cost'])
+    gd_unit_cost.append(cache['Unit_Cost'])
+    gd_net_capa.append(net_capa)
 
     x_t = x_new
     G_t = G_new
@@ -863,10 +941,10 @@ ani = animation.FuncAnimation(plt.gcf(), update, frames = range(0, T, 50), inter
 time_str = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 # 构造文件名
-filename = f"cell_CIO_opt_{time_str}.mp4"
+filename = f"cell_CIO_opt_{time_str}.gif"
 
 # 保存动画
-ani.save(filename, fps=10, dpi=120, writer='ffmpeg')
+ani.save(filename, fps=10, dpi=120, writer='pillow')
 
 plt.close()
 print(f"✅ 动态MP4视频已保存：{filename}")
