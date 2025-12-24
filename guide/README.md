@@ -9,14 +9,16 @@
 
 2. [Forward 与 Backward 实现指南](./implementation.md)
    - 详细解释了前向计算逻辑与基于边际成本的梯度推导过程。
+   - **新增**: 包含完整的 Python 参考代码实现。
 
 3. [LLM 优化策略指南](./llm_strategy.md)
    - 探讨如何将 LLM 作为智能控制器、规则生成器或通过微调成为神经优化器。
 
 ## 快速开始
 
-- 核心代码与仿真环境请参考项目根目录下的 `Project_AI_for_Network_Optimization.ipynb`。
-- 本项目包含完整的场景生成、传统优化算法框架以及 AI 优化接口。
+- **核心代码**: 项目根目录下的 `Project_AI_for_Network_Optimization.ipynb` 已经包含完整的场景生成和**已实现的传统优化算法**（Forward, Backward, Adam）。
+- **运行方式**: 直接打开 Jupyter Notebook 运行所有单元格即可观察优化效果。
+- **扩展开发**: 可参考 `implementation.md` 中的代码逻辑，尝试替换为其他优化器或修改成本函数。
 
 ## 项目背景
 

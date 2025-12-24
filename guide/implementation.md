@@ -19,6 +19,41 @@
    - 汇总得到总目标函数值 $obj$。
 5. **缓存结果**: 存储 `Prob`, `Load_m`, `L_m` 等变量。
 
+### Python 代码参考
+
+```python
+def forward(x_t, beta, Q0, Alpha, L0, C0_all, Wq, We, Rsrp, Conn, Capa, ALL_Users_Traffic, ALL_Cells_Bw):
+    # 1. RSRP + CIO
+    rsrp_cio = Rsrp + x_t[:, np.newaxis]
+    
+    # 2. Softmax Probability (with stability fix)
+    rsrp_norm = rsrp_cio - rsrp_cio.max(axis=0)
+    exp_rsrp = np.exp(rsrp_norm * beta) * Conn
+    sum_exp = exp_rsrp.sum(axis=0, keepdims=True)
+    sum_exp[sum_exp == 0] = 1e-9
+    Prob = exp_rsrp / sum_exp
+
+    # 3. Load
+    # L_m_abs: Absolute bandwidth usage
+    L_m_abs = np.sum((ALL_Users_Traffic * Prob) / Capa, axis=1)
+    # l_m_ratio: Bandwidth utilization ratio
+    l_m_ratio = L_m_abs / ALL_Cells_Bw
+
+    # 4. Costs
+    qos_cost_m = func_Q(l_m_ratio, ALL_Cells_Bw, Q0, L0, Alpha)
+    energy_cost_m = func_E(l_m_ratio, ALL_Cells_Bw, C0_all)
+
+    # Total Objective
+    obj = np.sum(Wq * qos_cost_m + We * energy_cost_m)
+
+    cache = {
+        'Prob': Prob,
+        'Load_m': l_m_ratio,
+        'Unit_Cost': Wq * qos_cost_m + We * energy_cost_m
+    }
+    return obj, cache
+```
+
 ---
 
 ## 2. Backward 过程 (反向传播)
@@ -36,10 +71,29 @@ $$\frac{\partial J}{\partial L_m} = W_q \cdot \left( Q_0 e^{\alpha(l_m - L_0)} (
 最终，目标函数对小区 $i$ 的偏置因子 $X_i$ 的梯度为：
 $$\frac{\partial J}{\partial X_i} = \beta \cdot \sum_{n \in \mathcal{N}} Prob_{in} \left( U_{in} - \sum_{m \in \mathcal{M}} Prob_{mn} U_{mn} \right)$$
 
-### 实现技巧：
-- **期望边际成本**: 先计算每个用户 $n$ 的期望边际成本 $\bar{U}_n = \sum_m Prob_{mn} U_{mn}$。
-- **矢量化计算**: 利用 NumPy 的矩阵运算，避免显式的 Python 循环，显著提升性能。
-- **邻区加速**: 在计算 $\sum_m$ 时，仅考虑 `NeighCell` 中标记的邻近小区，因为非邻区的 $Prob_{mn}$ 几乎为 0。
+### Python 代码参考
+
+```python
+def backward(x_t, cache, M, N, beta, Q0, Alpha, L0, C0_all, Wq, We, Conn, Capa, ALL_Users_Traffic, ALL_Cells_Bw):
+    Prob = cache['Prob']
+    l_m_ratio = cache['Load_m']
+
+    # 1. Marginal Cost w.r.t Load Ratio (l_m)
+    # Note: The code calculates derivative w.r.t l_m, then converts to L_m implicitly during U_mn calculation
+    grad_Q = grad_Q_to_l(l_m_ratio, ALL_Cells_Bw, Q0, L0, Alpha)
+    grad_E = grad_E_to_l(l_m_ratio, ALL_Cells_Bw, C0_all)
+    dJ_dl = Wq * grad_Q + We * grad_E  # Shape (M,)
+
+    # 2. Marginal Cost U_mn = dJ/dl_m * dl_m/dProb_mn
+    # dl_m/dProb_mn = A_n / (Capa_mn * B_m)
+    U_mn = dJ_dl[:, np.newaxis] * ALL_Users_Traffic / (Capa * ALL_Cells_Bw[:, np.newaxis])
+
+    # 3. Gradient w.r.t X_i
+    avg_U_n = np.sum(Prob * U_mn, axis=0) # Shape (N,)
+    grad_obj_to_x = beta * np.sum(Prob * (U_mn - avg_U_n), axis=1) # Shape (M,)
+
+    return grad_obj_to_x
+```
 
 ---
 
