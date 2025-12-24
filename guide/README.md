@@ -15,8 +15,8 @@
 
 ## 快速开始
 
-- 核心代码请参考项目根目录下的 `Project_AI_for_Network_Optimization.ipynb`。
-- 数据加载与预处理逻辑见 `Project2_Load_Data.ipynb`。
+- 核心代码与仿真环境请参考项目根目录下的 `Project_AI_for_Network_Optimization.ipynb`。
+- 本项目包含完整的场景生成、传统优化算法框架以及 AI 优化接口。
 
 ## 项目背景
 

@@ -28,10 +28,10 @@
 ### 核心梯度公式推导：
 
 定义 **边际成本 (Marginal Cost)** $U_{mn}$ 为将用户 $n$ 的单位概率分配给小区 $m$ 所带来的成本变化：
-$$U_{mn} = \frac{\partial Cost_m}{\partial L_m} \cdot \frac{A_n}{Capa_{mn}}$$
+$$U_{mn} = \frac{\partial J}{\partial L_m} \cdot \frac{\partial L_m}{\partial Prob_{mn}} = \frac{\partial J}{\partial L_m} \cdot \frac{A_n}{Capa_{mn}}$$
 
-其中，小区成本对带宽消耗的导数为：
-$$\frac{\partial Cost_m}{\partial L_m} = W_q \cdot \left( \frac{Q_0 \cdot \alpha}{B_m} e^{\alpha(l_m - L_0)} \right) + W_e \cdot \left( 2 \cdot C_{0,m} \cdot L_m \right)$$
+其中，系统总成本对小区 $m$ 消耗带宽 $L_m$ 的导数为：
+$$\frac{\partial J}{\partial L_m} = W_q \cdot \left( Q_0 e^{\alpha(l_m - L_0)} (1 + \alpha l_m) \right) + W_e \cdot \left( 2 \cdot C_{0,m} \cdot L_m \right)$$
 
 最终，目标函数对小区 $i$ 的偏置因子 $X_i$ 的梯度为：
 $$\frac{\partial J}{\partial X_i} = \beta \cdot \sum_{n \in \mathcal{N}} Prob_{in} \left( U_{in} - \sum_{m \in \mathcal{M}} Prob_{mn} U_{mn} \right)$$
