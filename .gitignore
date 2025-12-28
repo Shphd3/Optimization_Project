@@ -207,3 +207,4 @@ replay_buffer/
 rollouts/
 env_cache/
 monitor.csv
+.mp4

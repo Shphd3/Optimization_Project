@@ -1,0 +1,134 @@
+✅ Logging started. Output will be saved to ablation_results20251228_235023/log_20251228_235023.txt
+✅ Simulation Start: Random seed = 35547
+
+🚀 Starting Ablation Study with: ['gd', 'momentum', 'nesterov', 'adagrad', 'rmsprop', 'adam', 'lion']
+
+==============================
+--- Running Optimizer: gd ---
+==============================
+[gd] Round 200 | obj=4900.5777, max_load=1.0375, net_capa=10.4600, x_diff=0.5000, grad_norm=5.0000, time=0.3222s
+[gd] Round 400 | obj=4296.5064, max_load=1.0160, net_capa=10.4291, x_diff=0.5000, grad_norm=5.0000, time=0.3197s
+[gd] Round 600 | obj=4088.5708, max_load=1.0071, net_capa=10.4090, x_diff=0.5000, grad_norm=5.0000, time=0.3297s
+[gd] Round 800 | obj=3960.1590, max_load=1.0018, net_capa=10.3915, x_diff=0.5000, grad_norm=5.0000, time=0.3339s
+[gd] Round 1000 | obj=3868.4628, max_load=0.9978, net_capa=10.3743, x_diff=0.5000, grad_norm=5.0000, time=0.3382s
+[gd] Round 1200 | obj=3800.2439, max_load=0.9947, net_capa=10.3576, x_diff=0.5000, grad_norm=5.0000, time=0.3185s
+[gd] Round 1400 | obj=3747.5923, max_load=0.9922, net_capa=10.3427, x_diff=0.5000, grad_norm=5.0000, time=0.3246s
+[gd] Round 1600 | obj=3705.3146, max_load=0.9901, net_capa=10.3299, x_diff=0.5000, grad_norm=5.0000, time=0.3246s
+[gd] Round 1800 | obj=3670.4602, max_load=0.9883, net_capa=10.3194, x_diff=0.5000, grad_norm=5.0000, time=0.3261s
+[gd] Round 2000 | obj=3641.0663, max_load=0.9868, net_capa=10.3107, x_diff=0.5000, grad_norm=5.0000, time=0.3222s
+✅ gd finished in 3.27 seconds.
+
+==============================
+--- Running Optimizer: momentum ---
+==============================
+[momentum] Round 200 | obj=3646.3666, max_load=0.9992, net_capa=10.3125, x_diff=0.3163, grad_norm=5.0000, time=0.3510s
+[momentum] Round 400 | obj=3499.8258, max_load=0.9776, net_capa=10.2537, x_diff=0.5585, grad_norm=5.0000, time=0.3539s
+[momentum] Round 600 | obj=3431.7556, max_load=0.9737, net_capa=10.2139, x_diff=0.5329, grad_norm=5.0000, time=0.3516s
+[momentum] Round 800 | obj=3402.4811, max_load=0.9716, net_capa=10.1885, x_diff=0.5295, grad_norm=5.0000, time=0.3527s
+[momentum] Round 1000 | obj=3384.3307, max_load=0.9703, net_capa=10.1706, x_diff=0.5282, grad_norm=5.0000, time=0.3639s
+[momentum] Round 1200 | obj=3371.2264, max_load=0.9695, net_capa=10.1562, x_diff=0.5274, grad_norm=5.0000, time=0.3517s
+[momentum] Round 1400 | obj=3361.7596, max_load=0.9689, net_capa=10.1430, x_diff=0.5267, grad_norm=5.0000, time=0.3415s
+[momentum] Round 1600 | obj=3355.0698, max_load=0.9685, net_capa=10.1310, x_diff=0.5262, grad_norm=5.0000, time=0.3507s
+[momentum] Round 1800 | obj=3350.2793, max_load=0.9681, net_capa=10.1206, x_diff=0.5258, grad_norm=5.0000, time=0.3497s
+[momentum] Round 2000 | obj=3346.7404, max_load=0.9678, net_capa=10.1119, x_diff=0.5256, grad_norm=5.0000, time=0.3461s
+✅ momentum finished in 3.52 seconds.
+
+==============================
+--- Running Optimizer: nesterov ---
+==============================
+[nesterov] Round 200 | obj=3697.7298, max_load=0.9908, net_capa=10.3284, x_diff=0.7487, grad_norm=5.0000, time=0.3510s
+[nesterov] Round 400 | obj=3565.7873, max_load=1.0046, net_capa=10.2751, x_diff=0.7472, grad_norm=5.0000, time=0.3530s
+[nesterov] Round 600 | obj=3489.4767, max_load=1.0009, net_capa=10.2346, x_diff=0.7418, grad_norm=5.0000, time=0.3517s
+[nesterov] Round 800 | obj=3452.5090, max_load=0.9986, net_capa=10.2099, x_diff=0.7398, grad_norm=5.0000, time=0.3577s
+[nesterov] Round 1000 | obj=3430.4456, max_load=0.9972, net_capa=10.1912, x_diff=0.7388, grad_norm=5.0000, time=0.3605s
+[nesterov] Round 1200 | obj=3415.2004, max_load=0.9962, net_capa=10.1769, x_diff=0.7383, grad_norm=5.0000, time=0.3668s
+[nesterov] Round 1400 | obj=3403.5019, max_load=0.9955, net_capa=10.1654, x_diff=0.7380, grad_norm=5.0000, time=0.3740s
+[nesterov] Round 1600 | obj=3394.2745, max_load=0.9950, net_capa=10.1550, x_diff=0.7378, grad_norm=5.0000, time=0.3676s
+[nesterov] Round 1800 | obj=3387.1045, max_load=0.9946, net_capa=10.1452, x_diff=0.7376, grad_norm=5.0000, time=0.3577s
+[nesterov] Round 2000 | obj=3381.5890, max_load=0.9942, net_capa=10.1360, x_diff=0.7374, grad_norm=5.0000, time=0.3649s
+✅ nesterov finished in 3.61 seconds.
+
+==============================
+--- Running Optimizer: adagrad ---
+==============================
+[adagrad] Round 200 | obj=6020599.1959, max_load=1.4698, net_capa=10.4768, x_diff=0.1181, grad_norm=5.0000, time=0.3604s
+[adagrad] Round 400 | obj=623009.5329, max_load=1.3608, net_capa=10.4323, x_diff=0.1050, grad_norm=5.0000, time=0.3679s
+[adagrad] Round 600 | obj=150284.2235, max_load=1.2905, net_capa=10.4144, x_diff=0.0791, grad_norm=5.0000, time=0.3589s
+[adagrad] Round 800 | obj=55581.8235, max_load=1.2402, net_capa=10.4026, x_diff=0.0609, grad_norm=5.0000, time=0.3602s
+[adagrad] Round 1000 | obj=27340.9640, max_load=1.2019, net_capa=10.3908, x_diff=0.0527, grad_norm=5.0000, time=0.3650s
+[adagrad] Round 1200 | obj=16659.0294, max_load=1.1714, net_capa=10.3798, x_diff=0.0499, grad_norm=5.0000, time=0.3660s
+[adagrad] Round 1400 | obj=11715.3435, max_load=1.1468, net_capa=10.3695, x_diff=0.0463, grad_norm=5.0000, time=0.3702s
+[adagrad] Round 1600 | obj=9034.2657, max_load=1.1272, net_capa=10.3591, x_diff=0.0396, grad_norm=5.0000, time=0.3740s
+[adagrad] Round 1800 | obj=7439.1357, max_load=1.1117, net_capa=10.3485, x_diff=0.0280, grad_norm=5.0000, time=0.3649s
+[adagrad] Round 2000 | obj=6423.8469, max_load=1.0990, net_capa=10.3379, x_diff=0.0270, grad_norm=5.0000, time=0.3763s
+✅ adagrad finished in 3.67 seconds.
+
+==============================
+--- Running Optimizer: rmsprop ---
+==============================
+[rmsprop] Round 200 | obj=3809.9570, max_load=1.0227, net_capa=10.2653, x_diff=0.7272, grad_norm=5.0000, time=0.3664s
+[rmsprop] Round 400 | obj=3476.5207, max_load=1.0012, net_capa=10.1671, x_diff=0.8723, grad_norm=5.0000, time=0.3795s
+[rmsprop] Round 600 | obj=3393.6342, max_load=0.9933, net_capa=10.1054, x_diff=0.9400, grad_norm=5.0000, time=0.3734s
+[rmsprop] Round 800 | obj=3363.3181, max_load=0.9885, net_capa=10.0813, x_diff=0.9764, grad_norm=5.0000, time=0.3667s
+[rmsprop] Round 1000 | obj=3347.7312, max_load=0.9851, net_capa=10.0658, x_diff=0.5847, grad_norm=5.0000, time=0.3708s
+[rmsprop] Round 1200 | obj=3338.6736, max_load=0.9836, net_capa=10.0540, x_diff=0.9949, grad_norm=5.0000, time=0.3691s
+[rmsprop] Round 1400 | obj=3332.8992, max_load=0.9820, net_capa=10.0448, x_diff=0.7283, grad_norm=5.0000, time=0.3827s
+[rmsprop] Round 1600 | obj=3329.5978, max_load=0.9807, net_capa=10.0377, x_diff=1.0866, grad_norm=5.0000, time=0.3556s
+[rmsprop] Round 1800 | obj=3327.6266, max_load=0.9797, net_capa=10.0326, x_diff=0.8468, grad_norm=5.0000, time=0.3597s
+[rmsprop] Round 2000 | obj=3326.5815, max_load=0.9792, net_capa=10.0294, x_diff=1.2308, grad_norm=5.0000, time=0.3450s
+✅ rmsprop finished in 3.68 seconds.
+
+==============================
+--- Running Optimizer: adam ---
+==============================
+[adam] Round 200 | obj=3514.2951, max_load=0.9990, net_capa=10.2166, x_diff=0.8814, grad_norm=5.0000, time=0.3578s
+[adam] Round 400 | obj=3341.8218, max_load=0.9811, net_capa=10.0733, x_diff=0.3105, grad_norm=4.3356, time=0.3551s
+[adam] Round 600 | obj=3324.6338, max_load=0.9781, net_capa=10.0611, x_diff=0.4253, grad_norm=0.6196, time=0.3729s
+[adam] Round 800 | obj=3317.0641, max_load=0.9769, net_capa=10.0624, x_diff=0.0848, grad_norm=0.4209, time=0.3765s
+[adam] Round 1000 | obj=3314.2942, max_load=0.9761, net_capa=10.0573, x_diff=0.0979, grad_norm=4.1851, time=0.3832s
+[adam] Round 1200 | obj=3313.0119, max_load=0.9758, net_capa=10.0541, x_diff=0.0561, grad_norm=3.2171, time=0.3837s
+[adam] Round 1400 | obj=3312.4031, max_load=0.9752, net_capa=10.0515, x_diff=0.0588, grad_norm=1.1175, time=0.3881s
+[adam] Round 1600 | obj=3312.0788, max_load=0.9748, net_capa=10.0496, x_diff=0.0422, grad_norm=1.2932, time=0.3783s
+[adam] Round 1800 | obj=3311.8936, max_load=0.9747, net_capa=10.0482, x_diff=0.0263, grad_norm=1.1599, time=0.3786s
+[adam] Round 2000 | obj=3311.7810, max_load=0.9745, net_capa=10.0472, x_diff=0.0406, grad_norm=1.5570, time=0.3846s
+✅ adam finished in 3.77 seconds.
+
+==============================
+--- Running Optimizer: lion ---
+==============================
+[lion] Round 200 | obj=3901.5747, max_load=1.0163, net_capa=10.2937, x_diff=0.8000, grad_norm=5.0000, time=0.3860s
+[lion] Round 400 | obj=3443.9318, max_load=0.9917, net_capa=10.1806, x_diff=0.9250, grad_norm=5.0000, time=0.3833s
+[lion] Round 600 | obj=3377.6083, max_load=0.9845, net_capa=10.0838, x_diff=0.9404, grad_norm=5.0000, time=0.3708s
+[lion] Round 800 | obj=3352.9713, max_load=0.9897, net_capa=10.0578, x_diff=0.9755, grad_norm=5.0000, time=0.3684s
+[lion] Round 1000 | obj=3362.0853, max_load=0.9886, net_capa=10.0440, x_diff=0.9755, grad_norm=5.0000, time=0.3761s
+[lion] Round 1200 | obj=3346.8839, max_load=0.9827, net_capa=10.0419, x_diff=0.9837, grad_norm=5.0000, time=0.3708s
+[lion] Round 1400 | obj=3340.8195, max_load=0.9718, net_capa=10.0335, x_diff=0.9998, grad_norm=5.0000, time=0.3769s
+[lion] Round 1600 | obj=3341.9521, max_load=0.9823, net_capa=10.0255, x_diff=0.9968, grad_norm=5.0000, time=0.3898s
+[lion] Round 1800 | obj=3329.0960, max_load=0.9714, net_capa=10.0236, x_diff=0.9992, grad_norm=5.0000, time=0.3746s
+[lion] Round 2000 | obj=3330.8939, max_load=0.9714, net_capa=10.0196, x_diff=0.9982, grad_norm=5.0000, time=0.3806s
+✅ lion finished in 3.79 seconds.
+
+✅ Ablation Study Completed. All logs saved to ablation_results20251228_235023/log_20251228_235023.txt
+📊 Saved comparison plot: ablation_obj_20251228_235023.png
+📊 Saved comparison plot: ablation_load_20251228_235023.png
+📊 Saved comparison plot: ablation_qe_20251228_235023.png
+
+👉 Selected 'adam' for final detailed visualization (GIF generation).
+/root/anaconda3/lib/python3.12/site-packages/conda/base/context.py:969: FutureWarning: Adding 'defaults' to channel list implicitly. is deprecated and will be removed in 25.3. 
+
+To remove this warning, please choose a default channel explicitly via 'conda config --add channels <name>', e.g. 'conda config --add channels defaults'.
+  deprecated.topic(
+/root/anaconda3/lib/python3.12/site-packages/conda/base/context.py:969: FutureWarning: Adding 'defaults' to channel list implicitly. is deprecated and will be removed in 25.3. 
+
+To remove this warning, please choose a default channel explicitly via 'conda config --add channels <name>', e.g. 'conda config --add channels defaults'.
+  deprecated.topic(
+Channels:
+ - conda-forge
+ - defaults
+Platform: linux-64
+Collecting package metadata (repodata.json): - \ | / - \ | / - \ | / - \ | / - \ | done
+Solving environment: - \ done
+
+# All requested packages already installed.
+
+✅ 动态MP4视频已保存：cell_CIO_opt_20251228_235121.mp4

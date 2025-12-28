@@ -142,6 +142,36 @@ Cost_m = L_m * exp (alpha * (l_m - 0.8))，其中第一项为总带宽消耗量�
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib.animation as animation
+import sys
+import os
+import datetime
+
+# ==========================================
+# Logger Class for file and console output
+# ==========================================
+class Logger(object):
+    def __init__(self, filename='default.log'):
+        self.terminal = sys.stdout
+        self.log = open(filename, 'a', encoding='utf-8')
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+        self.log.flush()  # Ensure content is written immediately
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
+# Setup logging with timestamp
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+log_filename = f"log_{timestamp}.txt"
+# Redirect stdout to Logger
+sys.stdout = Logger(log_filename)
+
+print(f"✅ Logging started. Output will be saved to {log_filename}")
 
 # 训练的时候可随机，测试的时候选定seed进行对比
 random_seed = np.random.randint(0, 2**16 - 1)
@@ -473,7 +503,17 @@ def momentum_step(x_t, v_t, grad, lr=0.1, beta=0.9):
     return x_new, v_new
 
 # （3）Nesterov加速动量梯度下降法迭代步骤
-    # 原始Nesterov算法需要重新计算梯度，成本高，不推荐！！！
+def nesterov_step(x_t, v_t, grad, lr=0.1, beta=0.9):
+    # Nesterov (NAG) 实现，参考 PyTorch 的公式
+    # v_{t+1} = beta * v_t + grad  (更新速度/动量)
+    # x_{t+1} = x_t - lr * (beta * v_{t+1} + grad) (包含“预测”步骤的参数更新)
+    
+    # 1. 计算新的动量 (包含当前梯度)
+    v_new = beta * v_t + grad
+    
+    # 2. 更新参数 (使用新的动量进行前瞻更新)
+    x_new = x_t - lr * (beta * v_new + grad)
+    return x_new, v_new
 
 # （4）Adagrad自适应梯度下降法迭代步骤
 def adagrad_step(x_t, G_t, grad, lr=0.1):
@@ -539,96 +579,582 @@ We = 1  # 能耗成本权重
 # ==========================================
 #         迭代算法
 # ==========================================
+
+# Lion优化器单步更新函数
+def lion_step(x_t, m_t, grad, lr=0.1, beta1=0.9, beta2=0.99):
+    # Lion (EvoLved Sign Momentum) 优化器
+    # 相比Adam更简单、内存效率更高，通常收敛更快
+    # m_t: 动量（Momentum）
+    # grad: 当前梯度
+    
+    # 1. 计算更新用的符号动量（插值）
+    c_t = beta1 * m_t + (1 - beta1) * grad
+    
+    # 2. 更新参数 x (仅使用符号信息，步长固定为lr)
+    x_new = x_t - lr * np.sign(c_t)
+    
+    # 3. 更新动量缓存 (用于下一步)
+    m_new = beta2 * m_t + (1 - beta2) * grad
+    return x_new, m_new
+
+
 import time
 
 
+
+
+# ============================================================
+# 训练循环 (优化器执行核心逻辑)
+# ============================================================
+
+# 梯度裁剪函数：防止梯度爆炸
+def _clip_grad(grad, clip_norm):
+    if clip_norm is None:
+        return grad
+    norm = np.linalg.norm(grad)
+    if norm == 0:
+        return grad
+    # 如果梯度范数超过阈值，则按比例缩放
+    scale = min(1.0, clip_norm / norm)
+    return grad * scale
+
+
+# 通用优化器运行函数
+# 支持多种算法：GD, Momentum, AdaGrad, RMSprop, Adam, Lion
+def run_optimizer(
+    optimizer_name,      # 优化器名称字符串
+    x0,                  # 初始CIO值
+    beta,                # Softmax分散度参数
+    Q0, Alpha, L0,       # QoS成本参数
+    C0_all,              # 能源成本系数
+    Wq, We,              # 权重参数
+    Rsrp, Conn, Capa,    # 网络环境矩阵
+    ALL_Users_Traffic,   # 用户流量需求
+    ALL_Cells_Bw,        # 小区带宽
+    max_iteration=20000, # 最大迭代次数
+    tolerance=1e-3,      # 参数收敛阈值
+    tolerance_obj=1e-1,  # 目标函数收敛阈值
+    tolerance_grad=1.0,  # 梯度收敛阈值
+    lr=0.1,              # 学习率
+    normalize_x=True,    # 是否每轮对CIO进行去均值归一化
+    clip_grad_norm=None, # 梯度裁剪阈值 (None表示不裁剪)
+    print_every=100,     # 打印日志频率
+    optimizer_cfg=None,  # 优化器特定超参数 (如beta1, beta2)
+    weight_decay=0.0,    # 权重衰减 (L2正则化)
+    min_iteration=20,    # 最小迭代次数，防止过早停止
+):
+    if optimizer_cfg is None:
+        optimizer_cfg = {}
+
+    # 解析优化器名称，检查是否开启 Decoupled Weight Decay (如 AdamW)
+    opt_name = optimizer_name.lower()
+    decoupled_wd = optimizer_cfg.get("decoupled_wd", None)
+    if opt_name.endswith("w"): # 例如 adamw, lionw
+        base_opt = opt_name[:-1]
+        if decoupled_wd is None:
+            decoupled_wd = True
+    else:
+        base_opt = opt_name
+        if decoupled_wd is None:
+            decoupled_wd = False
+
+    M = Rsrp.shape[0]
+    N = Rsrp.shape[1]
+
+    # 初始化状态变量
+    x_t = x0.copy()
+    v_t = np.zeros_like(x_t) # 一阶矩估计 / 速度
+    G_t = np.zeros_like(x_t) # 二阶矩估计 / 累积梯度平方
+    m_t = np.zeros_like(x_t) # 动量缓存 (Lion用)
+
+    obj_pre = float("inf")
+    start_time = time.time()
+
+    # 初始化历史记录字典
+    history = {
+        "x_path": [],      # CIO轨迹
+        "load": [],        # 负载轨迹
+        "obj": [],         # 总目标函数值
+        "obj_Q": [],       # QoS成本
+        "obj_E": [],       # 能源成本
+        "unit_cost": [],   # 单位成本
+        "grad_norm": [],   # 梯度范数
+        "net_capa": [],    # 网络容量
+    }
+
+    # --- 主迭代循环 ---
+    for i in range(1, max_iteration + 1):
+        
+        # 1. 前向传播 (Forward): 计算当前Cost和状态
+        obj, cache = forward(
+            x_t,
+            beta,
+            Q0,
+            Alpha,
+            L0,
+            C0_all,
+            Wq,
+            We,
+            Rsrp,
+            Conn,
+            Capa,
+            ALL_Users_Traffic,
+            ALL_Cells_Bw,
+        )
+
+        # 估算网络总容量 (用于监控)
+        net_capa = network_capa_estimate(
+            cache["Prob"], Capa, Conn, ALL_Cells_Bw
+        )
+
+        # 2. 反向传播 (Backward): 计算梯度
+        grad = backward(
+            x_t, 
+            cache,
+            M,
+            N,
+            beta,
+            Q0,
+            Alpha,
+            L0,
+            C0_all,
+            Wq,
+            We,
+            Conn,
+            Capa,
+            ALL_Users_Traffic,
+            ALL_Cells_Bw,
+        )
+
+        # 3. 梯度预处理 (权重衰减 & 裁剪)
+        wd = optimizer_cfg.get("weight_decay", weight_decay)
+        grad_update = grad
+        
+        # 如果不是Decoupled WD，则将正则项加到梯度上 (L2正则)
+        if wd and not decoupled_wd:
+            grad_update = grad + wd * x_t
+        
+        grad_update = _clip_grad(grad_update, clip_grad_norm)
+
+        # 4. 执行优化器更新步骤
+        if base_opt == "gd":
+            x_new = grad_step(x_t, grad_update, lr=lr)
+        elif base_opt == "momentum":
+            x_new, v_t = momentum_step(
+                x_t, v_t, grad_update, lr=lr, beta=optimizer_cfg.get("beta", 0.9)
+            )
+        elif base_opt == "nesterov":
+            x_new, v_t = nesterov_step(
+                x_t, v_t, grad_update, lr=lr, beta=optimizer_cfg.get("beta", 0.9)
+            )
+        elif base_opt == "adagrad":
+            x_new, G_t = adagrad_step(x_t, G_t, grad_update, lr=lr)
+        elif base_opt == "rmsprop":
+            x_new, G_t = rmsprop_step(
+                x_t, G_t, grad_update, lr=lr, beta=optimizer_cfg.get("beta", 0.9)
+            )
+        elif base_opt == "adam":
+            x_new, v_t, G_t = adam_step(
+                x_t,
+                v_t,
+                G_t,
+                grad_update,
+                i,
+                lr=lr,
+                beta1=optimizer_cfg.get("beta1", 0.9),
+                beta2=optimizer_cfg.get("beta2", 0.999),
+            )
+        elif base_opt == "lion":
+            x_new, m_t = lion_step(
+                x_t,
+                m_t,
+                grad_update,
+                lr=lr,
+                beta1=optimizer_cfg.get("beta1", 0.9),
+                beta2=optimizer_cfg.get("beta2", 0.99),
+            )
+        else:
+            raise ValueError(f"Unknown optimizer: {optimizer_name}")
+
+        # 如果是Decoupled WD (如AdamW)，在更新参数后单独衰减权重
+        if wd and decoupled_wd:
+            x_new = x_new * (1 - lr * wd)
+
+        # 5. CIO归一化 (可选)
+        # 避免CIO整体漂移，保持相对值意义
+        if normalize_x:
+            x_new = x_new - np.mean(x_new)
+
+        # 6. 计算统计量与收敛判断
+        x_diff = np.linalg.norm(x_new - x_t)
+        grad_norm = np.linalg.norm(grad_update)
+
+        # 预计算下一轮的目标值 (用于判断收敛)
+        obj_new, cache_new = forward(
+            x_new,
+            beta,
+            Q0,
+            Alpha,
+            L0,
+            C0_all,
+            Wq,
+            We,
+            Rsrp,
+            Conn,
+            Capa,
+            ALL_Users_Traffic,
+            ALL_Cells_Bw,
+        )
+        net_capa_new = network_capa_estimate(
+            cache_new["Prob"], Capa, Conn, ALL_Cells_Bw
+        )
+
+        # 收敛条件检查: 参数变化小 OR 目标值变化小 OR 梯度趋零
+        # 增加 min_iteration 检查，防止过早停止
+        should_stop = False
+        if i > min_iteration:
+            # 使用相对变化率可能更稳健，或者调小阈值
+            obj_diff = abs(obj_pre - obj_new)
+            if obj_pre > 1e-9:
+                obj_rel_diff = obj_diff / abs(obj_pre)
+            else:
+                obj_rel_diff = obj_diff
+
+            should_stop = (
+                x_diff < tolerance
+                or obj_diff < tolerance_obj
+                or grad_norm < tolerance_grad
+            )
+
+        # 记录历史数据
+        history["x_path"].append(x_new.copy())
+        history["load"].append(cache_new["Load_m"])
+        history["obj"].append(obj_new)
+        history["obj_Q"].append(cache_new["QoS_Cost"])
+        history["obj_E"].append(cache_new["Energy_Cost"])
+        history["unit_cost"].append(cache_new["Unit_Cost"])
+        history["grad_norm"].append(grad_norm)
+        history["net_capa"].append(net_capa_new)
+
+        # 打印日志
+        if print_every and i % print_every == 0:
+            end_time = time.time()
+            print(
+                f"[{optimizer_name}] Round {i} | "
+                f"obj={obj_new:.4f}, max_load={np.max(cache_new['Load_m']):.4f}, "
+                f"net_capa={net_capa_new:.4f}, x_diff={x_diff:.4f}, "
+                f"grad_norm={grad_norm:.4f}, time={end_time - start_time:.4f}s"
+            )
+            start_time = time.time()
+
+        # 更新状态
+        x_t = x_new
+        obj_pre = obj_new
+        if should_stop:
+            print(f"[{optimizer_name}] Converged at Round {i}")
+            if i > min_iteration:
+                 if x_diff < tolerance: print(f"  Reason: x_diff ({x_diff:.2e}) < tol")
+                 if obj_diff < tolerance_obj: print(f"  Reason: obj_diff ({obj_diff:.2e}) < tol")
+                 if grad_norm < tolerance_grad: print(f"  Reason: grad_norm ({grad_norm:.2e}) < tol")
+            break
+
+    history["x_final"] = x_t.copy()
+    return history
+
+
+# 经典运行模式 (适配原有代码结构)
+def run_classic(
+    x0,
+    beta,
+    Q0,
+    Alpha,
+    L0,
+    C0_all,
+    Wq,
+    We,
+    Rsrp,
+    Conn,
+    Capa,
+    ALL_Users_Traffic,
+    ALL_Cells_Bw,
+    **kwargs,
+):
+    # 默认使用 Adam 优化器
+    history = run_optimizer(
+        "adam",
+        x0,
+        beta,
+        Q0,
+        Alpha,
+        L0,
+        C0_all,
+        Wq,
+        We,
+        Rsrp,
+        Conn,
+        Capa,
+        ALL_Users_Traffic,
+        ALL_Cells_Bw,
+        **kwargs,
+    )
+
+    # 将结果导出到全局变量，以便后续绘图代码使用
+    globals()["gd_path"] = history["x_path"]
+    globals()["gd_load"] = history["load"]
+    globals()["gd_obj"] = history["obj"]
+    globals()["gd_obj_Q"] = history["obj_Q"]
+    globals()["gd_obj_E"] = history["obj_E"]
+    globals()["gd_unit_cost"] = history["unit_cost"]
+    globals()["gd_net_capa"] = history["net_capa"]
+
+    return history
+
+
+# ============================================================
+# 消融实验与可视化模块 (对比不同优化器)
+# ============================================================
+def run_ablation(
+    x0,
+    beta,
+    Q0,
+    Alpha,
+    L0,
+    C0_all,
+    Wq,
+    We,
+    Rsrp,
+    Conn,
+    Capa,
+    ALL_Users_Traffic,
+    ALL_Cells_Bw,
+    optimizer_names=None,
+    normalize_flags=None,
+    weight_decay_flags=None,
+    **kwargs,
+):
+    # 默认对比列表
+    if optimizer_names is None:
+        optimizer_names = [
+            "gd", "momentum", "adagrad", "rmsprop", 
+            "adam", "adamw", "lion", "lionw",
+        ]
+    if normalize_flags is None:
+        normalize_flags = [True, False] # 对比是否归一化
+    if weight_decay_flags is None:
+        weight_decay_flags = [0.0, 1e-3] # 对比权重衰减
+
+    results = {}
+    for name in optimizer_names:
+        for norm_flag in normalize_flags:
+            for wd in weight_decay_flags:
+                wd_tag = "wd" if wd > 0 else "no_wd"
+                tag = f"{name}_{wd_tag}_norm" if norm_flag else f"{name}_{wd_tag}_no_norm"
+                # 运行优化器并保存结果
+                results[tag] = run_optimizer(
+                    name,
+                    x0,
+                    beta,
+                    Q0,
+                    Alpha,
+                    L0,
+                    C0_all,
+                    Wq,
+                    We,
+                    Rsrp,
+                    Conn,
+                    Capa,
+                    ALL_Users_Traffic,
+                    ALL_Cells_Bw,
+                    normalize_x=norm_flag,
+                    weight_decay=wd,
+                    **kwargs,
+                )
+    return results
+
+
+# 绘制目标函数收敛曲线对比
+def plot_ablation_obj(results, title="Objective Comparison"):
+    plt.figure(figsize=(10, 6))
+    for name, hist in results.items():
+        plt.semilogy(hist["obj"], label=name)
+    plt.title(title + " (Log Scale)")
+    plt.xlabel("Iteration")
+    plt.ylabel("Objective (Log)")
+    plt.grid(True, which="both", ls="-", alpha=0.3)
+    plt.legend(ncol=3, fontsize=8, loc='upper right')
+    plt.tight_layout()
+    plt.show()
+
+
+# 绘制最大负载收敛曲线对比
+def plot_ablation_max_load(results, title="Max Load Comparison"):
+    plt.figure(figsize=(10, 6))
+    for name, hist in results.items():
+        max_load = [np.max(l) for l in hist["load"]]
+        plt.semilogy(max_load, label=name)
+    plt.title(title + " (Log Scale)")
+    plt.xlabel("Iteration")
+    plt.ylabel("Max Load (Log)")
+    plt.grid(True, which="both", ls="-", alpha=0.3)
+    plt.legend(ncol=3, fontsize=8, loc='upper right')
+    plt.tight_layout()
+    plt.show()
+
+
+# 绘制QoS与能耗成本对比
+def plot_ablation_qe(results, title="QoS / Energy Comparison"):
+    plt.figure(figsize=(10, 6))
+    for name, hist in results.items():
+        plt.semilogy(hist["obj_Q"], label=f"{name}-Q")
+        plt.semilogy(hist["obj_E"], linestyle="--", label=f"{name}-E")
+    plt.title(title + " (Log Scale)")
+    plt.xlabel("Iteration")
+    plt.ylabel("Cost (Log)")
+    plt.grid(True, which="both", ls="-", alpha=0.3)
+    plt.legend(ncol=3, fontsize=8, loc='upper right')
+    plt.tight_layout()
+    plt.show()
+
+
+# ==========================================
+#         运行仿真 (Ablation Study)
+# ==========================================
+
+# 为了在 Jupyter Notebook 的一个单元格中运行，我们将日志类定义和优化过程放在一起
+import time
+import sys
+import os
+import datetime
+import matplotlib.pyplot as plt
+import numpy as np
+
+# --- 1. 定义日志记录器 ---
+class Logger(object):
+    def __init__(self, filename='default.log'):
+        self.terminal = sys.stdout
+        self.log = open(filename, 'a', encoding='utf-8')
+
+    def write(self, message):
+        self.terminal.write(message)
+        self.log.write(message)
+        self.log.flush()
+
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()
+
+# 设置日志文件名 (带时间戳)
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+log_filename = f"log_{timestamp}.txt"
+# 重定向 stdout
+sys.stdout = Logger(log_filename)
+
+print(f"✅ Logging started. Output will be saved to {log_filename}")
+
+
+# --- 2. 设置仿真参数 ---
 max_iteration = 2000  # 最大迭代次数
-tolerance = 1e-3     # 策略收敛容忍度
-tolerance_obj = 1e-1   # 目标值收敛容忍度
-tolerance_grad = 1    # 梯度值收敛容忍度
+tolerance = 1e-6     # 策略收敛容忍度 (建议调小)
+tolerance_obj = 1e-5   # 目标值收敛容忍度 (建议调小)
+tolerance_grad = 1e-4    # 梯度值收敛容忍度 (建议调小)
 
 print(f"✅ Simulation Start: Random seed = {random_seed}")
 
-
-# 记录算法迭代过程
-gd_path = []    # 记录x[M]
-gd_load = []    # 记录load[M]
-gd_obj = []     # 记录总目标函数
-gd_obj_Q = []   # 记录目标函数中的QoS
-gd_obj_E = []   # 记录目标函数中的Energy
-gd_unit_cost = []   # 记录总梯度（marginal cost）
-gd_unit_cost_Q = []  # 记录QoS梯度（marginal cost）
-gd_unit_cost_E = []  # 记录Energy梯度（marginal cost）
-gd_net_capa = []    # 记录网络总容量估测
-
-
-# 决策变量与中间变量（算法需要）
 x_0 = np.zeros(M)
 
-x_t = np.zeros(M)
-G_t = np.zeros(M)
-v_t = np.zeros(M)
-obj_pre = float('inf')
-start_time = time.time()
 
-for i in range(max_iteration):
+# --- 3. 定义要对比的优化器列表 (包含所有实现的优化器) ---
+optimizers_to_test = ["gd", "momentum", "nesterov", "adagrad", "rmsprop", "adam", "lion"]
+results = {}
 
-    # 1. Forward to generate and cache results
+print(f"\n🚀 Starting Ablation Study with: {optimizers_to_test}")
 
-    obj, cache = forward(x_t, beta, Q0, Alpha, L0, C0_all, Wq, We, Rsrp, Conn, Capa, ALL_Users_Traffic, ALL_Cells_Bw)
+# --- 4. 依次运行每个优化器 ---
+for opt in optimizers_to_test:
+    print(f"\n{'='*30}\n--- Running Optimizer: {opt} ---\n{'='*30}")
+    
+    # 记录开始时间
+    start_t = time.time()
+    
+    # 调用 run_optimizer (它会打印详细日志)
+    hist = run_optimizer(
+        opt,
+        x_0,
+        beta,
+        Q0,
+        Alpha,
+        L0,
+        C0_all,
+        Wq,
+        We,
+        Rsrp,
+        Conn,
+        Capa,
+        ALL_Users_Traffic,
+        ALL_Cells_Bw,
+        max_iteration=max_iteration,
+        tolerance=tolerance,
+        tolerance_obj=tolerance_obj,
+        tolerance_grad=tolerance_grad,
+        lr=0.1,
+        clip_grad_norm=5.0, # 增加梯度裁剪，防止GD等算法发散
+        print_every=200 # 每200轮打印一次
+    )
+    
+    # 记录结束时间
+    elapsed = time.time() - start_t
+    print(f"✅ {opt} finished in {elapsed:.2f} seconds.")
+    
+    results[opt] = hist
 
-    # Calculate Network Capacity for monitoring
-    net_capa = network_capa_estimate(cache['Prob'], Capa, Conn, ALL_Cells_Bw)
-
-    # 2. Backward to compute gradient
-
-    grad = backward(x_t, cache, M, N, beta, Q0, Alpha, L0, C0_all, Wq, We, Conn, Capa, ALL_Users_Traffic, ALL_Cells_Bw)
+print(f"\n✅ Ablation Study Completed. All logs saved to {log_filename}")
 
 
-    # 3. update solution by gradient-descent algorithms
+# --- 5. 保存对比图表 ---
+# 绘制目标函数对比
+plot_ablation_obj(results, title="Optimizer Comparison: Objective")
+plt.savefig(f"ablation_obj_{timestamp}.png")
+print(f"📊 Saved comparison plot: ablation_obj_{timestamp}.png")
 
-    x_new, v_new, G_new = adam_step(x_t, v_t, G_t, grad, i+1, lr=0.1)
+# 绘制最大负载对比
+plot_ablation_max_load(results, title="Optimizer Comparison: Max Load")
+plt.savefig(f"ablation_load_{timestamp}.png")
+print(f"📊 Saved comparison plot: ablation_load_{timestamp}.png")
 
-
-    # 4. normalize x (for better illustration)
-    x_new = x_new - np.mean(x_new)
-
-
-    # 根据不同收敛条件，判断算法收敛
-    if np.linalg.norm(x_new - x_t) < tolerance:
-        print(f"1.算法在第 {i+1} 次迭代收敛(x): obj={obj:.4f}, max_load={np.max(cache['Load_m']):.4f}, net_capa={net_capa:.4f}, x_diff={np.linalg.norm(x_new - x_t):.4f}, grad_norm={np.linalg.norm(grad):.4f}, CIO_avg_min_max=[{np.mean(x_new):.4f},{np.min(x_new):.4f},{np.max(x_new):.4f}], prob={np.sum(cache['Prob'])/N}")
-        break
-
-    if np.abs(obj_pre - obj) < tolerance_obj:
-        print(f"1.算法在第 {i+1} 次迭代收敛(obj): obj={obj:.4f}, max_load={np.max(cache['Load_m']):.4f}, net_capa={net_capa:.4f}, x_diff={np.linalg.norm(x_new - x_t):.4f}, grad_norm={np.linalg.norm(grad):.4f}, CIO_avg_min_max=[{np.mean(x_new):.4f},{np.min(x_new):.4f},{np.max(x_new):.4f}], prob={np.sum(cache['Prob'])/N}")
-        break
-
-    if np.linalg.norm(grad) < tolerance_grad:
-        print(f"1.算法在第 {i+1} 次迭代收敛(grad): obj={obj:.4f}, max_load={np.max(cache['Load_m']):.4f}, net_capa={net_capa:.4f}, x_diff={np.linalg.norm(x_new - x_t):.4f}, grad_norm={np.linalg.norm(grad):.4f}, CIO_avg_min_max=[{np.mean(x_new):.4f},{np.min(x_new):.4f},{np.max(x_new):.4f}], prob={np.sum(cache['Prob'])/N}")
-        break
-
-    if i==max_iteration-1:
-        print(f"1.算法在第 {i+1} 次迭代结束(未收敛): obj={obj:.4f}, max_load={np.max(cache['Load_m']):.4f}, net_capa={net_capa:.4f}, x_diff={np.linalg.norm(x_new - x_t):.4f}, grad_norm={np.linalg.norm(grad):.4f}, CIO_avg_min_max=[{np.mean(x_new):.4f},{np.min(x_new):.4f},{np.max(x_new):.4f}], prob={np.sum(cache['Prob'])/N}")
+# 绘制QoS/Energy对比
+plot_ablation_qe(results, title="Optimizer Comparison: QoS vs Energy")
+plt.savefig(f"ablation_qe_{timestamp}.png")
+print(f"📊 Saved comparison plot: ablation_qe_{timestamp}.png")
 
 
-    if i % 100 == 0:
-        end_time = time.time()
-        print(f"Round [{i}] Time [{end_time - start_time:.4f}s] | obj={obj:.4f}, max_load={np.max(cache['Load_m']):.4f}, net_capa={net_capa:.4f}, x_diff={np.linalg.norm(x_new - x_t):.4f}, grad_norm={np.linalg.norm(grad):.4f}, CIO_avg_min_max=[{np.mean(x_new):.4f},{np.min(x_new):.4f},{np.max(x_new):.4f}], prob={np.sum(cache['Prob'])/N}")
-        start_time = time.time()
+# --- 6. 准备后续可视化数据 ---
+# 选择一个表现较好的优化器结果 (例如 'adam' 或 'lion') 用于生成 GIF
+# 这里默认选择 'adam'，因为它通常比较稳定
+best_opt = "adam"
+if best_opt not in results:
+    best_opt = optimizers_to_test[0] # Fallback
 
-    gd_path.append(x_t.copy())
-    gd_load.append(cache['Load_m'])
-    gd_obj.append(obj)
-    gd_obj_Q.append(cache['QoS_Cost'])
-    gd_obj_E.append(cache['Energy_Cost'])
-    gd_unit_cost.append(cache['Unit_Cost'])
-    gd_net_capa.append(net_capa)
+print(f"\n👉 Selected '{best_opt}' for final detailed visualization (GIF generation).")
+history = results[best_opt]
 
-    x_t = x_new
-    G_t = G_new
-    v_t = v_new
+# 导出全局变量 (模拟 run_classic 的行为，确保兼容后续绘图代码)
+globals()["gd_path"] = history["x_path"]
+globals()["gd_load"] = history["load"]
+globals()["gd_obj"] = history["obj"]
+globals()["gd_obj_Q"] = history["obj_Q"]
+globals()["gd_obj_E"] = history["obj_E"]
+globals()["gd_unit_cost"] = history["unit_cost"]
+globals()["gd_net_capa"] = history["net_capa"]
 
-    obj_pre = obj
+# 恢复变量供后续绘图代码使用
+x_t = history["x_final"]
+obj = history["obj"][-1]
+net_capa = history["net_capa"][-1]
+i = len(history["x_path"])
+
+# 重新计算最终状态的缓存
+obj_final, cache = forward(x_t, beta, Q0, Alpha, L0, C0_all, Wq, We, Rsrp, Conn, Capa, ALL_Users_Traffic, ALL_Cells_Bw)
+obj_pre = obj
 
 """## 可视化（静态图）
 
@@ -747,10 +1273,11 @@ plt.show()
 plt.figure(figsize=(10, 5))
 for m in range(M):
     plt.plot(np.array(gd_path)[:,m], label=f"Cell {m}")
-plt.title("Cell CIO (X) over Time")
+plt.yscale('log') # 使用对数坐标轴
+plt.title("Cell CIO (X) over Time (Log Scale)")
 plt.xlabel("Time Slot")
-plt.ylabel("Cell CIO (per cell)")
-plt.grid(True)
+plt.ylabel("Cell CIO (Log)")
+plt.grid(True, which="both", ls="-", alpha=0.3)
 plt.tight_layout()
 # plt.legend(ncol=6, mode='expand', loc='upper center')
 plt.show()
@@ -759,10 +1286,11 @@ plt.show()
 plt.figure(figsize=(10, 5))
 for m in range(M):
     plt.plot(np.array(gd_load)[:,m], label=f"Cell {m}")
-plt.title("Cell Load over Time")
+plt.yscale('log') # 使用对数坐标轴
+plt.title("Cell Load over Time (Log Scale)")
 plt.xlabel("Time Slot")
-plt.ylabel("Cell Load (per cell)")
-plt.grid(True)
+plt.ylabel("Cell Load (Log)")
+plt.grid(True, which="both", ls="-", alpha=0.3)
 plt.tight_layout()
 # plt.legend(ncol=6, mode='expand', loc='upper center')
 plt.show()
